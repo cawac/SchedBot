@@ -3,13 +3,15 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
+from bot import config
+
 #from aiogram import Bot, Dispatcher, types
 #from aiogram.utils import executor
 
 from db import DatabaseHandler
 from logger import logger
 
-BOT_TOKEN = '8110534930:AAGPUBApVJbVHXHlI8dLfdeP1xRtgeJcpEY'
+BOT_TOKEN = config.BOT_TOKEN
 
 database = DatabaseHandler()
 
