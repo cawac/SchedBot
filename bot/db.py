@@ -2,7 +2,7 @@ from datetime import datetime
 
 import psycopg2
 from logger import logger
-from typing import Any
+from typing import Any, List
 
 DB_NAME = "database"
 DB_USER = "user"
@@ -53,7 +53,6 @@ class DatabaseHandler:
             CREATE TABLE IF NOT EXISTS lessons (
                 id SERIAL PRIMARY KEY,
                 subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
-                lesson_number INTEGER NOT NULL REFERENCES lesson_time(lesson_number) ON DELETE CASCADE,
                 type VARCHAR(5) NOT NULL CHECK (type IN ('L', 'P'))
             );
             """,
@@ -68,7 +67,8 @@ class DatabaseHandler:
                 lesson_id INTEGER REFERENCES lessons(id) ON DELETE CASCADE,
                 group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
                 lesson_date DATE NOT NULL,
-                PRIMARY KEY (lesson_id, group_id)
+                lesson_number INTEGER NOT NULL REFERENCES lesson_time(lesson_number) ON DELETE CASCADE,
+                PRIMARY KEY (group_id, lesson_date, lesson_number)
             );
             """,
             """
@@ -100,7 +100,7 @@ class DatabaseHandler:
             logger.info(f"Register group: {group_name}")
             return get_info_from_query(cur.fetchone())
 
-    def add_user_to_group(self, tg_id: int, username: str, group_name: str) -> int | None:
+    def attach_user_to_group(self, tg_id: int, username: str, group_name: str) -> int | None:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
@@ -111,7 +111,7 @@ class DatabaseHandler:
             )
             group_id = cur.fetchone()
             if not group_id:
-                return
+                return None
             cur.execute(
                  """
                 INSERT INTO users (tg_id, username, group_id) 
@@ -164,7 +164,6 @@ class DatabaseHandler:
     def set_default(self) -> None:
         self.set_default_lesson_time()
         self.set_default_subjects()
-        self.add_group("23-LR-CS")
 
     def set_default_lesson_time(self) -> None:
         logger.info(f"Setting up default lesson time")
@@ -222,11 +221,48 @@ class DatabaseHandler:
             logger.info(f"lesson added")
             return get_info_from_query(cur.fetchone())
 
-    def add_lesson_to_group(self, group_name: str, lesson_date: datetime, subject_name: str, lesson_number: int, lesson_type: str) -> None:
-        lesson_id = self.add_lesson(subject_name, lesson_number, lesson_type)
+    def add_lecture(self, group_names: List[str], lesson_date: datetime, subject_name: str, lesson_number: int) -> tuple | None:
+        if group_names is None:
+            return None
+        group_ids = [self.get_group_by_name(group) for group in group_names if group is not None]
+        group_ids = tuple(group_id for group_id in group_ids if group_id is not None)
+
+        with self.conn.cursor() as cur:
+            for i in range(len(group_ids)):
+                cur.execute(
+                    """
+                    SELECT group_id, lesson_date
+                    FROM lesson_groups 
+                    WHERE group_id = %s AND lesson_date = %s
+                    """,
+                    (group_ids[i], lesson_date.strftime("%Y-%m-%d"))
+                )
+                self.conn.commit()
+                res = get_info_from_query(cur.fetchone())
+                if res:
+                    logger.info(f"group {group_names[i]} already have pair")
+                    return None
+
+        lesson_id = self.add_lesson(subject_name, lesson_number, "L")
         if lesson_id is None:
             return None
 
+        with self.conn.cursor() as cur:
+            for i in range(len(group_ids)):
+                cur.execute(
+                    """
+                    INSERT INTO lesson_groups (lesson_id, group_id, lesson_date) 
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (group_id, lesson_date) DO NOTHING
+                    RETURNING lesson_id;
+                    """,
+                    (lesson_id, group_ids[i], lesson_date.strftime("%Y-%m-%d"))
+                )
+            self.conn.commit()
+            logger.info(f"Lecture added to groups {group_names}")
+            return get_info_from_query(cur.fetchall())
+
+    def add_practice_to_group(self, group_name: str, lesson_date: datetime, subject_name: str, lesson_number: int) -> None:
         group_id = self.get_group_by_name(group_name)
         if group_id is None:
             return None
@@ -234,9 +270,28 @@ class DatabaseHandler:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
+                SELECT group_id, lesson_date
+                FROM lesson_groups 
+                WHERE group_id = %s AND lesson_date = %s
+                """,
+                (group_id, lesson_date.strftime("%Y-%m-%d"))
+            )
+            self.conn.commit()
+            res = get_info_from_query(cur.fetchone())
+            if res:
+                logger.info(f"group {group_name} already have pair")
+                return None
+
+        lesson_id = self.add_lesson(subject_name, lesson_number, "P")
+        if lesson_id is None:
+            return None
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
                 INSERT INTO lesson_groups (lesson_id, group_id, lesson_date) 
                 VALUES (%s, %s, %s)
-                ON CONFLICT DO NOTHING
+                ON CONFLICT (group_id, lesson_date) DO NOTHING
                 RETURNING lesson_id;
                 """,
                 (lesson_id, group_id, lesson_date.strftime("%Y-%m-%d"))
@@ -253,10 +308,58 @@ class DatabaseHandler:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT lesson_id
-                FROM lesson_groups
-                WHERE group_id = %s AND lesson_date = %s
+                SELECT 
+                    s.name AS subject_name,
+                    l.type,
+                    lt.start_time,
+                    lt.end_time
+                FROM lesson_groups lg
+                JOIN lessons l ON lg.lesson_id = l.id
+                JOIN subjects s ON l.subject_id = s.id
+                JOIN lesson_time lt ON l.lesson_number = lt.lesson_number
+                WHERE lg.group_id = %s AND lg.lesson_date = %s
+                ORDER BY l.lesson_number;
                 """,
-                (group_id, lesson_date.strftime("%Y-%m-%d")))
-            logger.info(f"returning lesson for group {group_name}")
-            return cur.fetchall()
+                (group_id, lesson_date.strftime("%Y-%m-%d"))
+            )
+            lessons = [LessonMessage(*item) for item in cur.fetchall()]
+            logger.info(
+                f"Returning {len(lessons)} lessons for group '{group_name}' on {lesson_date.strftime('%Y-%m-%d')}")
+            return lessons
+
+    def get_lessons_for_user_on_date(self, tg_id: int, lesson_date: datetime):
+        group_id = self.get_user_group(tg_id)
+        if group_id is None:
+            return None
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 
+                    s.name AS subject_name,
+                    l.type,
+                    lt.start_time,
+                    lt.end_time
+                FROM lesson_groups lg
+                JOIN lessons l ON lg.lesson_id = l.id
+                JOIN subjects s ON l.subject_id = s.id
+                JOIN lesson_time lt ON l.lesson_number = lt.lesson_number
+                WHERE lg.group_id = %s AND lg.lesson_date = %s
+                ORDER BY l.lesson_number;
+                """,
+                (group_id, lesson_date.strftime("%Y-%m-%d"))
+            )
+            lessons = [LessonMessage(*item) for item in cur.fetchall()]
+            logger.info(
+                f"Returning {len(lessons)} lessons for user: '{tg_id}' on {lesson_date.strftime('%Y-%m-%d')}")
+            return lessons
+
+class LessonMessage:
+    def __init__(self, subject_name: str, lesson_type: str, lesson_start: datetime, lesson_end: datetime) -> None:
+        self.subject_name = subject_name
+        self.lesson_type = lesson_type
+        self.lesson_start = lesson_start
+        self.lesson_end = lesson_end
+
+    def __repr__(self) -> str:
+        return f"{self.subject_name} ({self.lesson_type}): {self.lesson_start.strftime("%H:%M")} - {self.lesson_end.strftime("%H:%M")}\n"
