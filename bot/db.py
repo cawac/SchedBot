@@ -201,7 +201,7 @@ class DatabaseHandler:
             self.conn.commit()
 
 
-    def add_lesson(self, subject_name: str, lesson_number: int, lesson_type: str):
+    def add_lesson(self, subject_name: str, lesson_type: str):
         subject_id = self.get_subject_by_name(subject_name)
 
         if subject_id is None:
@@ -211,11 +211,11 @@ class DatabaseHandler:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO lessons (subject_id, lesson_number, type) 
-                VALUES (%s, %s, %s)
+                INSERT INTO lessons (subject_id, type) 
+                VALUES (%s, %s)
                 RETURNING id;
                 """,
-                (subject_id, lesson_number, lesson_type)
+                (subject_id, lesson_type)
             )
             self.conn.commit()
             logger.info(f"lesson added")
@@ -231,11 +231,11 @@ class DatabaseHandler:
             for i in range(len(group_ids)):
                 cur.execute(
                     """
-                    SELECT group_id, lesson_date
+                    SELECT group_id, lesson_date, lesson_number
                     FROM lesson_groups 
-                    WHERE group_id = %s AND lesson_date = %s
+                    WHERE group_id = %s AND lesson_date = %s AND lesson_number = %s;
                     """,
-                    (group_ids[i], lesson_date.strftime("%Y-%m-%d"))
+                    (group_ids[i], lesson_date.strftime("%Y-%m-%d"), lesson_number)
                 )
                 self.conn.commit()
                 res = get_info_from_query(cur.fetchone())
@@ -243,7 +243,7 @@ class DatabaseHandler:
                     logger.info(f"group {group_names[i]} already have pair")
                     return None
 
-        lesson_id = self.add_lesson(subject_name, lesson_number, "L")
+        lesson_id = self.add_lesson(subject_name, "L")
         if lesson_id is None:
             return None
 
@@ -251,12 +251,12 @@ class DatabaseHandler:
             for i in range(len(group_ids)):
                 cur.execute(
                     """
-                    INSERT INTO lesson_groups (lesson_id, group_id, lesson_date) 
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (group_id, lesson_date) DO NOTHING
+                    INSERT INTO lesson_groups (lesson_id, group_id, lesson_date, lesson_number) 
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (group_id, lesson_date, lesson_number) DO NOTHING
                     RETURNING lesson_id;
                     """,
-                    (lesson_id, group_ids[i], lesson_date.strftime("%Y-%m-%d"))
+                    (lesson_id, group_ids[i], lesson_date.strftime("%Y-%m-%d"), lesson_number)
                 )
             self.conn.commit()
             logger.info(f"Lecture added to groups {group_names}")
@@ -270,11 +270,11 @@ class DatabaseHandler:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT group_id, lesson_date
+                SELECT group_id, lesson_date, lesson_number
                 FROM lesson_groups 
-                WHERE group_id = %s AND lesson_date = %s
+                WHERE group_id = %s AND lesson_date = %s AND lesson_number = %s;
                 """,
-                (group_id, lesson_date.strftime("%Y-%m-%d"))
+                (group_id, lesson_date.strftime("%Y-%m-%d"), lesson_number)
             )
             self.conn.commit()
             res = get_info_from_query(cur.fetchone())
@@ -289,12 +289,12 @@ class DatabaseHandler:
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO lesson_groups (lesson_id, group_id, lesson_date) 
-                VALUES (%s, %s, %s)
+                INSERT INTO lesson_groups (lesson_id, group_id, lesson_date, lesson_number) 
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (group_id, lesson_date) DO NOTHING
                 RETURNING lesson_id;
                 """,
-                (lesson_id, group_id, lesson_date.strftime("%Y-%m-%d"))
+                (lesson_id, group_id, lesson_date.strftime("%Y-%m-%d"), lesson_number)
             )
             self.conn.commit()
             logger.info(f"lesson added to group")
@@ -316,9 +316,9 @@ class DatabaseHandler:
                 FROM lesson_groups lg
                 JOIN lessons l ON lg.lesson_id = l.id
                 JOIN subjects s ON l.subject_id = s.id
-                JOIN lesson_time lt ON l.lesson_number = lt.lesson_number
+                JOIN lesson_time lt ON lg.lesson_number = lt.lesson_number
                 WHERE lg.group_id = %s AND lg.lesson_date = %s
-                ORDER BY l.lesson_number;
+                ORDER BY lg.lesson_number;
                 """,
                 (group_id, lesson_date.strftime("%Y-%m-%d"))
             )
@@ -343,9 +343,9 @@ class DatabaseHandler:
                 FROM lesson_groups lg
                 JOIN lessons l ON lg.lesson_id = l.id
                 JOIN subjects s ON l.subject_id = s.id
-                JOIN lesson_time lt ON l.lesson_number = lt.lesson_number
+                JOIN lesson_time lt ON lg.lesson_number = lt.lesson_number
                 WHERE lg.group_id = %s AND lg.lesson_date = %s
-                ORDER BY l.lesson_number;
+                ORDER BY lg.lesson_number;
                 """,
                 (group_id, lesson_date.strftime("%Y-%m-%d"))
             )
