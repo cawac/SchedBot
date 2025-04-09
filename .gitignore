@@ -3,3 +3,5 @@
 /bot/config.py
 *.log
 .idea
+*.env
+*setup.py

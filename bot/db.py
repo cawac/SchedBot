@@ -1,4 +1,4 @@
-from datetime import time, date
+from datetime import time, date, datetime, timedelta
 from operator import and_
 from typing import List, Any
 
@@ -6,9 +6,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 
-
 from models import *
 from logger import logger
+from config import tz
 
 
 class DBManager:
@@ -118,11 +118,12 @@ class DBManager:
                     logger.error(f"Group '{group_name}' not found.")
                     continue
 
+            localized_data = tz.localize(lesson_date)
             for group_id in group_ids:
                 lesson_group = LessonGroup(
                     lesson_id=lesson.id,
                     group_id=group_id,
-                    lesson_date=lesson_date,
+                    lesson_date=localized_data,
                     lesson_number=lesson_number
                 )
                 session.add(lesson_group)
@@ -225,10 +226,27 @@ class DBManager:
             "DesignPatterns",
             "OS Software",
             "Multythread. C#",
-            "SQL&DataProc",
+            "SQL&DataProc", 
             "Modern JS WebDev",
             "Automated testing",
             "IP Law Basics",
         ]
         for subject_name in subjects:
             self.create_subject(subject_name)
+
+    def delete_yesterdays_lessons(self) -> None:
+        session = self.Session()
+        try:
+            yesterday = (datetime.now().date() - timedelta(days=1))
+
+            deleted_count = session.query(LessonGroup).filter(
+                LessonGroup.lesson_date == yesterday
+            ).delete(synchronize_session=False)
+
+            session.commit()
+            logger.info(f"Deleted {deleted_count} lessons from {yesterday}.")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error deleting yesterday's lessons: {str(e)}")
+        finally:
+            session.close()
