@@ -3,22 +3,19 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from bot import config
-
-#from aiogram import Bot, Dispatcher, types
-#from aiogram.utils import executor
-
-from db import DatabaseHandler
+from config import BOT_TOKEN, DATABASE_URL
+from db import DBManager
 from logger import logger
 
-BOT_TOKEN = config.BOT_TOKEN
+BOT_TOKEN = BOT_TOKEN
 
-database = DatabaseHandler()
+database = DBManager(DATABASE_URL)
 
 WAITING_FOR_GROUP = 1
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    database.create_user(update.message.from_user.id)
     await update.message.reply_text(
 """
 Hello!
@@ -40,33 +37,34 @@ to start using this bot you need to attach you to the group by name and that onl
 """)
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    response = database.get_lessons_for_user_on_date(update.message.from_user.id, datetime.today())
+    response = database.get_user_lessons_on_date(update.message.from_user.id, datetime.today())
     if response:
-        await update.message.reply_text("".join((str(item) for item in response)))
+        message = "Today you have these lessons:\n"
+        for lesson in response:
+            message += f"{lesson["lesson_number"]}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
+        await update.message.reply_text(message)
     else:
         await update.message.reply_text("I can't find any lessons for that day. have a good day)")
 
 async def tomorrow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    response = database.get_lessons_for_user_on_date(update.message.from_user.id, datetime.today() + timedelta(days=1))
+    response = database.get_user_lessons_on_date(update.message.from_user.id, datetime.today() + timedelta(days=1))
     if response:
-        await update.message.reply_text("".join((str(item) for item in response)))
+        message = "Tomorrow you have these lessons:\n"
+        for lesson in response:
+            message += f"{lesson["lesson_number"]}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
+        await update.message.reply_text(message)
     else:
         await update.message.reply_text("I can't find any lessons for that day. have a good day)")
 
 async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Please write your group name same as in Excel table")
     return WAITING_FOR_GROUP
-    #database.add_user_to_group(update.message.from_user.id, update.message.from_user.username, "23-LR-CS")
-    #await update.message.reply_text(f"You added to the group {'23-LR-CS'}")
 
 async def receive_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    group_name = update.message.text
+    group_name: str = update.message.text
     user_info = update.message.from_user
-    res = database.attach_user_to_group(user_info.id, user_info.username, group_name)
-    if res:
-        await update.message.reply_text(f"You attached to group {group_name}")
-    else:
-        await update.message.reply_text("Something went wrong (maybe your group doesn't exist or you write group with mistakes)")
+    reply: str = database.attach_user_to_group(user_info.id, group_name)
+    await update.message.reply_text(reply)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -88,14 +86,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     message_type: str = update.message.chat.type
     text: str = update.message.text
 
-    print(f"User {update.message.chat.id} sent message: {message_type}: '{text}'")
+    logger.info(f"User {update.message.chat.id} sent message: {message_type}: '{text}'")
     response: str = handle_response(text)
-    print(f"Bot {response}")
+    logger.info(f"Bot {response}")
     await update.message.reply_text(response)
 
 
 if __name__ == "__main__":
-    print("start")
+    logger.info("Bot is started")
     app = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -105,7 +103,6 @@ if __name__ == "__main__":
         },
         fallbacks=[CommandHandler("cancel", cancel)]
     )
-
 
     # Commands
     app.add_handler(conv_handler)
@@ -118,19 +115,5 @@ if __name__ == "__main__":
     # Messages
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
 
-    # Database set up
-    database.create_tables()
-    database.set_default()
-    database.add_group("23-LR-CS")
-    database.add_group("23-LR-JA")
-    database.add_group("23-LR-JS")
-    database.add_practice_to_group("23-LR-CS", datetime.today(), "ProbTheory&Stats", 6)
-    database.add_practice_to_group("23-LR-JA", datetime.today(), "ProbTheory&Stats", 6)
-    database.add_practice_to_group("23-LR-JS", datetime.today(), "ProbTheory&Stats", 6)
-    database.add_lecture(["23-LR-CS", "23-LR-JA", "23-LR-JS"], datetime.today() + timedelta(days=1), "ProbTheory&Stats", 6)
-    database.add_practice_to_group("23-LR-JA", datetime.today() + timedelta(days=1), "Algorithms and DS", 7)
-    database.add_practice_to_group("23-LR-JS", datetime.today() + timedelta(days=1), "Algorithms and DS", 7)
-    # logger.info(database.add_lesson_to_group("23-LR-CS", datetime.today(), "DesignPatterns", 1, 'L'))
-
-    print("polling")
+    logger.info("Bot polling")
     app.run_polling(poll_interval=3)

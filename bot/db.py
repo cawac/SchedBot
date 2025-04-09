@@ -1,365 +1,234 @@
-from datetime import datetime
+from datetime import time, date
+from operator import and_
+from typing import List, Any
 
-import psycopg2
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
+from sqlalchemy.exc import IntegrityError
+
+
+from models import *
 from logger import logger
-from typing import Any, List
-
-DB_NAME = "database"
-DB_USER = "user"
-DB_PASS = "password"
-DB_HOST = "db"
-DB_PORT = "5432"
 
 
-def get_info_from_query(query: tuple | None) -> Any:
-    if query:
-        return query[0]
-    return None
-
-def connect_db():
-    return psycopg2.connect(
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST,
-        port=DB_PORT,
-    )
-
-
-class DatabaseHandler:
-    def __init__(self):
-        self.conn = connect_db()
-        self.create_tables()
-
-    def __del__(self):
-        self.conn.close()
-
-    def create_tables(self):
-        TABLES = [
-            """
-            CREATE TABLE IF NOT EXISTS subjects (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS lesson_time (
-                lesson_number INTEGER PRIMARY KEY CHECK (lesson_number BETWEEN 1 AND 7),
-                start_time TIME NOT NULL,
-                end_time TIME NOT NULL
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS lessons (
-                id SERIAL PRIMARY KEY,
-                subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
-                type VARCHAR(5) NOT NULL CHECK (type IN ('L', 'P'))
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS groups (
-                id SERIAL PRIMARY KEY,
-                name TEXT NOT NULL UNIQUE
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS lesson_groups (
-                lesson_id INTEGER REFERENCES lessons(id) ON DELETE CASCADE,
-                group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
-                lesson_date DATE NOT NULL,
-                lesson_number INTEGER NOT NULL REFERENCES lesson_time(lesson_number) ON DELETE CASCADE,
-                PRIMARY KEY (group_id, lesson_date, lesson_number)
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                tg_id BIGINT UNIQUE,
-                username TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL 
-            );
-            """,
-        ]
-        cur = self.conn.cursor()
-        for table in TABLES:
-            cur.execute(table)
-
-        self.conn.commit()
+class DBManager:
+    def __init__(self, database_url: str) -> None:
+        self.engine = create_engine(database_url)
+        self.Session = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(self.engine)
 
     # Create
-    def add_group(self, group_name: str) -> int | None:
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO groups (name) VALUES (%s) ON CONFLICT (name) DO NOTHING RETURNING id;
-                """,
-                (group_name,)
-            )
-            self.conn.commit()
-            logger.info(f"Register group: {group_name}")
-            return get_info_from_query(cur.fetchone())
+    def create_user(self, tg_id: int, group_id: int = None) -> None:
+        session = self.Session()
+        try:
+            user = User(tg_id=tg_id, group_id=group_id)
+            session.add(user)
+            session.commit()
+            logger.info(f"User {tg_id} created.")
+        except IntegrityError:
+            session.rollback()
+            logger.error(f"User {tg_id} already exists.")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Creating user '{tg_id}': {str(e)}")
+        finally:
+            session.close()
 
-    def attach_user_to_group(self, tg_id: int, username: str, group_name: str) -> int | None:
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id FROM groups 
-                WHERE name = %s;
-                """,
-                (group_name,)
-            )
-            group_id = cur.fetchone()
-            if not group_id:
-                return None
-            cur.execute(
-                 """
-                INSERT INTO users (tg_id, username, group_id) 
-                VALUES (%s, %s, %s) 
-                ON CONFLICT (tg_id) 
-                DO UPDATE SET 
-                    group_id = EXCLUDED.group_id 
-                RETURNING id;
-                """,
-                (tg_id, username, group_id)
-            )
-            self.conn.commit()
-            logger.info(f"Add user: @{username}, with tg id: {tg_id}, to group: {group_id}")
-            return get_info_from_query(cur.fetchone())
+    def create_group(self, name: str) -> None:
+        session = self.Session()
+        try:
+            group = Group(name=name)
+            session.add(group)
+            session.commit()
+            logger.info(f"Group '{name}' created.")
+        except IntegrityError:
+            session.rollback()
+            logger.error(f"Group '{name}' already exists.")
+        finally:
+            session.close()
 
+    def create_lesson(self, subject_id: int, type_of_lesson: str) -> None:
+        session = self.Session()
+        try:
+            lesson = Lesson(subject_id=subject_id, type=type_of_lesson)
+            session.add(lesson)
+            session.commit()
+            logger.info(f"Lesson created for subject {subject_id} of type {type_of_lesson}.")
+        except IntegrityError:
+            session.rollback()
+            logger.error(f"Error: Could not create lesson.")
+        finally:
+            session.close()
 
-    def get_group_by_name(self, group_name: str) -> int:
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id FROM groups 
-                WHERE name = %s;
-                """,
-                (group_name,)
-            )
-            return get_info_from_query(cur.fetchone())
+    def create_subject(self, subject_name: str) -> None:
+        session = self.Session()
+        try:
+            subject = Subject(name=subject_name)
+            session.add(subject)
+            session.commit()
+            logger.info(f"Subject '{subject_name}' created.")
+        except IntegrityError:
+            session.rollback()
+            logger.error(f"Subject {subject_name} already exists.")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Creating subject '{subject_name}': {str(e)}")
+        finally:
+            session.close()
 
-    def get_subject_by_name(self, subject_name: str) -> int | None:
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id FROM subjects 
-                WHERE name = %s;
-                """,
-                (subject_name,)
-            )
-            return get_info_from_query(cur.fetchone())
+    def create_lesson_time(self, lesson_number: int, start_time: time, end_time: time) -> None:
+        session = self.Session()
+        try:
+            lesson_time = LessonTime(lesson_number=lesson_number, start_time=start_time, end_time=end_time)
+            session.add(lesson_time)
+            session.commit()
+            logger.info(f"Lesson time for lesson number {lesson_number} created, from {start_time} to {end_time}.")
+        except IntegrityError:
+            session.rollback()
+            logger.error(f"Lesson number {lesson_number} already exists.")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Creating lesson time for lesson number {lesson_number}: {str(e)}")
+        finally:
+            session.close()
 
-    def get_user_group(self, tg_id: int) -> int:
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT group_id FROM users 
-                WHERE tg_id = %s;
-                """,
-                (tg_id,)
-            )
-            return get_info_from_query(cur.fetchone())
+    def create_lesson_and_add_groups(self, group_names: list, lesson_date: date, lesson_number: int, subject_name: str,
+                                     lesson_type: str) -> None:
+        session = self.Session()
+        try:
+            subject = session.query(Subject).filter(Subject.name == subject_name).first()
 
-    def set_default(self) -> None:
-        self.set_default_lesson_time()
-        self.set_default_subjects()
+            if not subject:
+                logger.error(f"Subject '{subject_name}' not found.")
+                return
 
-    def set_default_lesson_time(self) -> None:
-        logger.info(f"Setting up default lesson time")
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO lesson_time (lesson_number, start_time, end_time) VALUES
-                (1, '09:00', '10:30'),
-                (2, '10:40', '12:10'),
-                (3, '12:20', '13:50'),
-                (4, '14:20', '15:50'),
-                (5, '16:00', '17:30'),
-                (6, '18:00', '19:30'),
-                (7, '19:50', '21:20')
-                ON CONFLICT (lesson_number) DO UPDATE 
-                SET start_time = EXCLUDED.start_time, 
-                    end_time = EXCLUDED.end_time;
-               """
-            )
-            self.conn.commit()
+            lesson = Lesson(subject_id=subject.id, type=lesson_type)
+            session.add(lesson)
+            session.commit()
 
-    def set_default_subjects(self) -> None:
-        logger.info(f"Setting up subjects")
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO subjects (name) VALUES
-                ('Algorithms and DS'),
-                ('ProbTheory&Stats'),
-                ('DesignPatterns'),
-                ('OS Software')
-                ON CONFLICT (name) DO NOTHING;
-                """
-            )
-            self.conn.commit()
+            logger.info(f"Lesson created for subject {subject.id} of type {lesson_type}.")
 
+            group_ids = []
+            for group_name in group_names:
+                group = session.query(Group).filter(Group.name == group_name).first()
+                if group:
+                    group_ids.append(group.id)
+                    logger.info(f"Group '{group_name}' found with ID {group.id}.")
+                else:
+                    logger.error(f"Group '{group_name}' not found.")
+                    continue
 
-    def add_lesson(self, subject_name: str, lesson_type: str):
-        subject_id = self.get_subject_by_name(subject_name)
-
-        if subject_id is None:
-            logger.error(f"add_lesson: lesson {subject_name} does not exist")
-            return None
-
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO lessons (subject_id, type) 
-                VALUES (%s, %s)
-                RETURNING id;
-                """,
-                (subject_id, lesson_type)
-            )
-            self.conn.commit()
-            logger.info(f"lesson added")
-            return get_info_from_query(cur.fetchone())
-
-    def add_lecture(self, group_names: List[str], lesson_date: datetime, subject_name: str, lesson_number: int) -> tuple | None:
-        if group_names is None:
-            return None
-        group_ids = [self.get_group_by_name(group) for group in group_names if group is not None]
-        group_ids = tuple(group_id for group_id in group_ids if group_id is not None)
-
-        with self.conn.cursor() as cur:
-            for i in range(len(group_ids)):
-                cur.execute(
-                    """
-                    SELECT group_id, lesson_date, lesson_number
-                    FROM lesson_groups 
-                    WHERE group_id = %s AND lesson_date = %s AND lesson_number = %s;
-                    """,
-                    (group_ids[i], lesson_date.strftime("%Y-%m-%d"), lesson_number)
+            for group_id in group_ids:
+                lesson_group = LessonGroup(
+                    lesson_id=lesson.id,
+                    group_id=group_id,
+                    lesson_date=lesson_date,
+                    lesson_number=lesson_number
                 )
-                self.conn.commit()
-                res = get_info_from_query(cur.fetchone())
-                if res:
-                    logger.info(f"group {group_names[i]} already have pair")
-                    return None
+                session.add(lesson_group)
 
-        lesson_id = self.add_lesson(subject_name, "L")
-        if lesson_id is None:
-            return None
+            session.commit()
 
-        with self.conn.cursor() as cur:
-            for i in range(len(group_ids)):
-                cur.execute(
-                    """
-                    INSERT INTO lesson_groups (lesson_id, group_id, lesson_date, lesson_number) 
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (group_id, lesson_date, lesson_number) DO NOTHING
-                    RETURNING lesson_id;
-                    """,
-                    (lesson_id, group_ids[i], lesson_date.strftime("%Y-%m-%d"), lesson_number)
-                )
-            self.conn.commit()
-            logger.info(f"Lecture added to groups {group_names}")
-            return get_info_from_query(cur.fetchall())
+            for group_id in group_ids:
+                logger.info(f"Group {group_id} attached to lesson {lesson.id}.")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Creating lesson and adding groups: {str(e)}")
+        finally:
+            session.close()
 
-    def add_practice_to_group(self, group_name: str, lesson_date: datetime, subject_name: str, lesson_number: int) -> None:
-        group_id = self.get_group_by_name(group_name)
-        if group_id is None:
-            return None
+    def get_user_lessons_on_date(self, tg_id: int, lesson_date: date) -> list[dict[str, InstrumentedAttribute | Any]] | None:
+        session = self.Session()
+        try:
+            user = session.query(User).filter(User.tg_id == tg_id).first()
 
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT group_id, lesson_date, lesson_number
-                FROM lesson_groups 
-                WHERE group_id = %s AND lesson_date = %s AND lesson_number = %s;
-                """,
-                (group_id, lesson_date.strftime("%Y-%m-%d"), lesson_number)
-            )
-            self.conn.commit()
-            res = get_info_from_query(cur.fetchone())
-            if res:
-                logger.info(f"group {group_name} already have pair")
+            if not user:
+                logger.error(f"User with tg_id {tg_id} not found.")
                 return None
 
-        lesson_id = self.add_lesson(subject_name, lesson_number, "P")
-        if lesson_id is None:
+            lessons = session.query(LessonGroup).join(Lesson).join(Group).join(LessonTime).filter(
+                and_(
+                    LessonGroup.lesson_date == lesson_date.strftime('%Y-%m-%d'),
+                    LessonGroup.group_id == user.group_id
+                )
+            ).order_by(LessonGroup.lesson_number.asc()).all()
+
+            if not lessons:
+                logger.info(f"No lessons found for user {tg_id} on {lesson_date}.")
+                return []
+
+            logger.info(f"Found {len(lessons)} lessons for user {tg_id} on {lesson_date}.")
+
+            lesson_details = []
+            for lesson in lessons:
+                lesson_info = {
+                    "lesson_number": lesson.lesson_number,
+                    "subject_name": lesson.lesson.subject.name,
+                    "lesson_type": lesson.lesson.type,
+                    "lesson_start_time": lesson.lesson_time.start_time.strftime('%H:%M'),
+                    "lesson_end_time": lesson.lesson_time.end_time.strftime('%H:%M'),
+                }
+                lesson_details.append(lesson_info)
+
+            return lesson_details
+
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Fetching lessons for user {tg_id} on {lesson_date}: {str(e)}")
             return None
+        finally:
+            session.close()
 
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO lesson_groups (lesson_id, group_id, lesson_date, lesson_number) 
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (group_id, lesson_date) DO NOTHING
-                RETURNING lesson_id;
-                """,
-                (lesson_id, group_id, lesson_date.strftime("%Y-%m-%d"), lesson_number)
-            )
-            self.conn.commit()
-            logger.info(f"lesson added to group")
-            return get_info_from_query(cur.fetchone())
+    def attach_user_to_group(self, tg_id: int, group_name: str) -> str:
+        session = self.Session()
+        try:
+            user = session.query(User).filter(User.tg_id == tg_id).first()
 
-    def get_lessons_for_group_on_date(self, group_name: str, lesson_date: datetime):
-        group_id = self.get_group_by_name(group_name)
-        if group_id is None:
-            return None
+            if not user:
+                logger.error(f"User {tg_id} not found.")
+                return f"User not found."
 
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 
-                    s.name AS subject_name,
-                    l.type,
-                    lt.start_time,
-                    lt.end_time
-                FROM lesson_groups lg
-                JOIN lessons l ON lg.lesson_id = l.id
-                JOIN subjects s ON l.subject_id = s.id
-                JOIN lesson_time lt ON lg.lesson_number = lt.lesson_number
-                WHERE lg.group_id = %s AND lg.lesson_date = %s
-                ORDER BY lg.lesson_number;
-                """,
-                (group_id, lesson_date.strftime("%Y-%m-%d"))
-            )
-            lessons = [LessonMessage(*item) for item in cur.fetchall()]
-            logger.info(
-                f"Returning {len(lessons)} lessons for group '{group_name}' on {lesson_date.strftime('%Y-%m-%d')}")
-            return lessons
+            group = session.query(Group).filter(Group.name == group_name).first()
 
-    def get_lessons_for_user_on_date(self, tg_id: int, lesson_date: datetime):
-        group_id = self.get_user_group(tg_id)
-        if group_id is None:
-            return None
+            if not group:
+                logger.error(f"Group {group_name} not found.")
+                return f"Group {group_name} not found."
 
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 
-                    s.name AS subject_name,
-                    l.type,
-                    lt.start_time,
-                    lt.end_time
-                FROM lesson_groups lg
-                JOIN lessons l ON lg.lesson_id = l.id
-                JOIN subjects s ON l.subject_id = s.id
-                JOIN lesson_time lt ON lg.lesson_number = lt.lesson_number
-                WHERE lg.group_id = %s AND lg.lesson_date = %s
-                ORDER BY lg.lesson_number;
-                """,
-                (group_id, lesson_date.strftime("%Y-%m-%d"))
-            )
-            lessons = [LessonMessage(*item) for item in cur.fetchall()]
-            logger.info(
-                f"Returning {len(lessons)} lessons for user: '{tg_id}' on {lesson_date.strftime('%Y-%m-%d')}")
-            return lessons
+            user.group_id = group.id
+            session.commit()
+            logger.info(f"User {tg_id} attached to group '{group.name}'.")
+            return f"Attached to group '{group.name}'."
 
-class LessonMessage:
-    def __init__(self, subject_name: str, lesson_type: str, lesson_start: datetime, lesson_end: datetime) -> None:
-        self.subject_name = subject_name
-        self.lesson_type = lesson_type
-        self.lesson_start = lesson_start
-        self.lesson_end = lesson_end
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Attaching user {tg_id} to group {group_name}: {str(e)}")
+            return f"Something went wrong write to @cawa0007"
+        finally:
+            session.close()
 
-    def __repr__(self) -> str:
-        return f"{self.subject_name} ({self.lesson_type}): {self.lesson_start.strftime("%H:%M")} - {self.lesson_end.strftime("%H:%M")}\n"
+    def set_default(self):
+        lesson_times = [
+            (1, time(9, 0), time(10, 30)),  # Lesson 1: 9:00 - 10:30
+            (2, time(10, 40), time(12, 10)),  # Lesson 2: 10:40 - 12:10
+            (3, time(12, 20), time(13, 50)),  # Lesson 3: 12:20 - 13:50
+            (4, time(14, 20), time(15, 50)),  # Lesson 4: 14:20 - 15:50
+            (5, time(16, 0), time(17, 30)),  # Lesson 5: 16:00 - 17:30
+            (6, time(18, 0), time(19, 30)),  # Lesson 6: 18:00 - 19:30
+            (7, time(19, 50), time(21, 20))  # Lesson 7: 19:50 - 21:20
+        ]
+        for lesson_time in lesson_times:
+            self.create_lesson_time(lesson_time[0], lesson_time[1], lesson_time[2])
+
+        subjects = [
+            "Algorithms and DS",
+            "ProbTheory&Stats",
+            "DesignPatterns",
+            "OS Software",
+            "Multythread. C#",
+            "SQL&DataProc",
+            "Modern JS WebDev",
+            "Automated testing",
+            "IP Law Basics",
+        ]
+        for subject_name in subjects:
+            self.create_subject(subject_name)

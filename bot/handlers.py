@@ -1,5 +1,4 @@
 from aiogram import types, F
-from misc import dp
 from aiogram.types import Message
 from aiogram.filters import Command
 

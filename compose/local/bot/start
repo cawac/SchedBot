@@ -4,5 +4,5 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-python db.py
+python setup.py
 python main.py
