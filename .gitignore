@@ -2,6 +2,6 @@
 /__pycache__
 /bot/config.py
 *.log
-.idea
-*.env
+/.idea
+/bot/.env
 *setup.py
