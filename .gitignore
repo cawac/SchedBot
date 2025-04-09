@@ -4,4 +4,4 @@
 *.log
 /.idea
 /bot/.env
-*setup.py
+/bot/setup.py

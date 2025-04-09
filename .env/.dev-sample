@@ -7,3 +7,5 @@ SQL_HOST=postgres
 SQL_PORT=5432
 
 CELERY_BROKER=amqp://user:password@rabbitmq:5672/
+
+BOT_TOKEN=token_from_bot_father
