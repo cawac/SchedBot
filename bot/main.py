@@ -5,6 +5,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 from config import BOT_TOKEN, DATABASE_URL, now_local
 from db import DBManager
+import logger
 import logging
 
 logger = logging.getLogger("bot")
