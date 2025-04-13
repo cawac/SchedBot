@@ -50,7 +50,7 @@ class DBManager:
     def create_lesson(self, subject_id: int, type_of_lesson: str, auditorium: str = None) -> None:
         session = self.Session()
         try:
-            lesson = Lesson(subject_id=subject_id, type=type_of_lesson, aud=auditorium)
+            lesson = Lesson(subject_id=subject_id, type=type_of_lesson, auditorium=auditorium)
             session.add(lesson)
             session.commit()
             logger.info(f"Lesson created for subject {subject_id} of type {type_of_lesson}.")
@@ -102,7 +102,7 @@ class DBManager:
                 logger.error(f"Subject '{subject_name}' not found.")
                 return
 
-            lesson = Lesson(subject_id=subject.id, type=lesson_type, aud=auditorium)
+            lesson = Lesson(subject_id=subject.id, type=lesson_type, auditorium=auditorium)
             session.add(lesson)
             session.commit()
 
