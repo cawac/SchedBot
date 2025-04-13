@@ -29,6 +29,7 @@ class Lesson(Base):
     id = Column(Integer, primary_key=True)
     subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"))
     type = Column(String(25), nullable=False)
+    auditorium = Column(String(20), nullable=True)
 
     subject = relationship("Subject")
 

@@ -3,9 +3,11 @@ from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from config import BOT_TOKEN, DATABASE_URL
+from config import BOT_TOKEN, DATABASE_URL, now_local
 from db import DBManager
-from logger import logger
+import logging
+
+logger = logging.getLogger("bot")
 
 BOT_TOKEN = BOT_TOKEN
 
@@ -37,27 +39,33 @@ to start using this bot you need to attach you to the group by name and that onl
 """)
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    response = database.get_user_lessons_on_date(update.message.from_user.id, datetime.today())
+    response = database.get_user_lessons_on_date(update.message.from_user.id, now_local().date())
     if response:
         message = "Today you have these lessons:\n"
-        for lesson in response:
-            message += f"{lesson["lesson_number"]}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
+        for i, lesson in enumerate(response):
+            message += f"{i+1}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
         await update.message.reply_text(message)
     else:
         await update.message.reply_text("I can't find any lessons for that day. have a good day)")
 
 async def tomorrow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    response = database.get_user_lessons_on_date(update.message.from_user.id, datetime.today() + timedelta(days=1))
+    response = database.get_user_lessons_on_date(update.message.from_user.id, now_local().date() + timedelta(days=1))
     if response:
         message = "Tomorrow you have these lessons:\n"
-        for lesson in response:
-            message += f"{lesson["lesson_number"]}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
+        for i, lesson in enumerate(response):
+            message += f"{i+1}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
         await update.message.reply_text(message)
     else:
         await update.message.reply_text("I can't find any lessons for that day. have a good day)")
 
 async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Please write your group name same as in Excel table")
+    groups = database.get_groups()
+    groups = [group.name for group in groups]
+    message = "\n".join(groups)
+    await update.message.reply_text(
+"""Please write your group name same as in Google Sheet table (23-LR-CS)
+Groups which shedule added:
+""" + message)
     return WAITING_FOR_GROUP
 
 async def receive_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -74,12 +82,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Responses
 def handle_response(text: str) -> str:
-    processed = text.lower()
-
-    if "hello" in processed:
-        return "hi"
-
-    return "default"
+    dt = now_local()
+    return "current date and time:" + dt.strftime("%Y-%m-%d - %H:%M:%S")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -116,4 +120,4 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
 
     logger.info("Bot polling")
-    app.run_polling(poll_interval=3)
+    app.run_polling(poll_interval=1)

@@ -7,9 +7,9 @@ from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 
 from models import *
-from logger import logger
-from config import tz
+import logging
 
+logger = logging.getLogger("database")
 
 class DBManager:
     def __init__(self, database_url: str) -> None:
@@ -47,10 +47,10 @@ class DBManager:
         finally:
             session.close()
 
-    def create_lesson(self, subject_id: int, type_of_lesson: str) -> None:
+    def create_lesson(self, subject_id: int, type_of_lesson: str, auditorium: str = None) -> None:
         session = self.Session()
         try:
-            lesson = Lesson(subject_id=subject_id, type=type_of_lesson)
+            lesson = Lesson(subject_id=subject_id, type=type_of_lesson, aud=auditorium)
             session.add(lesson)
             session.commit()
             logger.info(f"Lesson created for subject {subject_id} of type {type_of_lesson}.")
@@ -93,7 +93,7 @@ class DBManager:
             session.close()
 
     def create_lesson_and_add_groups(self, group_names: list, lesson_date: date, lesson_number: int, subject_name: str,
-                                     lesson_type: str) -> None:
+                                     lesson_type: str, auditorium: str = None) -> None:
         session = self.Session()
         try:
             subject = session.query(Subject).filter(Subject.name == subject_name).first()
@@ -102,7 +102,7 @@ class DBManager:
                 logger.error(f"Subject '{subject_name}' not found.")
                 return
 
-            lesson = Lesson(subject_id=subject.id, type=lesson_type)
+            lesson = Lesson(subject_id=subject.id, type=lesson_type, aud=auditorium)
             session.add(lesson)
             session.commit()
 
@@ -118,12 +118,11 @@ class DBManager:
                     logger.error(f"Group '{group_name}' not found.")
                     continue
 
-            localized_data = tz.localize(lesson_date)
             for group_id in group_ids:
                 lesson_group = LessonGroup(
                     lesson_id=lesson.id,
                     group_id=group_id,
-                    lesson_date=localized_data,
+                    lesson_date=lesson_date,
                     lesson_number=lesson_number
                 )
                 session.add(lesson_group)
@@ -209,13 +208,13 @@ class DBManager:
 
     def set_default(self):
         lesson_times = [
-            (1, time(9, 0), time(10, 30)),  # Lesson 1: 9:00 - 10:30
-            (2, time(10, 40), time(12, 10)),  # Lesson 2: 10:40 - 12:10
-            (3, time(12, 20), time(13, 50)),  # Lesson 3: 12:20 - 13:50
-            (4, time(14, 20), time(15, 50)),  # Lesson 4: 14:20 - 15:50
-            (5, time(16, 0), time(17, 30)),  # Lesson 5: 16:00 - 17:30
-            (6, time(18, 0), time(19, 30)),  # Lesson 6: 18:00 - 19:30
-            (7, time(19, 50), time(21, 20))  # Lesson 7: 19:50 - 21:20
+            (1, time(9, 0), time(10, 30)),
+            (2, time(10, 40), time(12, 10)),
+            (3, time(12, 20), time(13, 50)),
+            (4, time(14, 20), time(15, 50)),
+            (5, time(16, 0), time(17, 30)),
+            (6, time(18, 0), time(19, 30)),
+            (7, time(19, 50), time(21, 20))
         ]
         for lesson_time in lesson_times:
             self.create_lesson_time(lesson_time[0], lesson_time[1], lesson_time[2])
@@ -248,5 +247,17 @@ class DBManager:
         except Exception as e:
             session.rollback()
             logger.error(f"Error deleting yesterday's lessons: {str(e)}")
+        finally:
+            session.close()
+
+    def get_groups(self):
+        session = self.Session()
+        try:
+            groups = session.query(Group).all()
+            return groups
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Ошибка при получении групп: {e}")
+            return []
         finally:
             session.close()

@@ -3,7 +3,7 @@
 SQL_DATABASE=postgres
 SQL_USER=postgres
 SQL_PASSWORD=postgres
-SQL_HOST=postgres
+SQL_HOST=db
 SQL_PORT=5432
 
 CELERY_BROKER=amqp://user:password@rabbitmq:5672/
