@@ -8,6 +8,6 @@ enable_utc = False
 beat_schedule = {
     'run-daily-task': {
         'task': 'celery_configs.tasks.daily_task',
-        'schedule': crontab(hour=14, minute=0),
+        'schedule': crontab(hour=0, minute=0),
     },
 }
