@@ -7,5 +7,6 @@ SQL_HOST=db
 SQL_PORT=5432
 
 CELERY_BROKER=amqp://user:password@rabbitmq:5672/
+TZ=Europe/Vilnius
 
 BOT_TOKEN=token_from_bot_father
