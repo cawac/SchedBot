@@ -2,6 +2,7 @@
 
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONPATH=/bot
 
 RUN apt-get update \
   && apt-get install -y build-essential \
@@ -24,19 +25,19 @@ COPY ./compose/local/bot/start /start
 RUN sed -i 's/\r$//g' /start
 RUN chmod +x /start
 
-#COPY ./compose/local/bot/celery/worker/start /start-celeryworker
-#RUN sed -i 's/\r$//g' /start-celeryworker
-#RUN chmod +x /start-celeryworker
-#
-#COPY ./compose/local/bot/celery/beat/start /start-celerybeat
-#RUN sed -i 's/\r$//g' /start-celerybeat
-#RUN chmod +x /start-celerybeat
-#
-#COPY ./compose/local/django/celery/flower/start /start-flower
-#RUN sed -i 's/\r$//g' /start-flower
-#RUN chmod +x /start-flower
+COPY ./compose/local/bot/celery/worker/start /start-celeryworker
+RUN sed -i 's/\r$//g' /start-celeryworker
+RUN chmod +x /start-celeryworker
 
-WORKDIR /app
+COPY ./compose/local/bot/celery/beat/start /start-celerybeat
+RUN sed -i 's/\r$//g' /start-celerybeat
+RUN chmod +x /start-celerybeat
+
+COPY ./compose/local/bot/celery/flower/start /start-flower
+RUN sed -i 's/\r$//g' /start-flower
+RUN chmod +x /start-flower
+
+WORKDIR /bot
 
 EXPOSE 8000
 

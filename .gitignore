@@ -1,7 +1,9 @@
 /.venv
 /__pycache__
-/bot/config.py
 *.log
 /.idea
 /bot/.env
 /bot/setup.py
+/bot/bot.log
+/bot/celerybeat-schedule
+/pgdata
