@@ -1,15 +1,19 @@
 from datetime import time, date, datetime, timedelta
 from operator import and_
-from typing import List, Any
+from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 
-from models import *
+from models import User, Group, LessonGroup, Lesson, LessonTime, Subject, Base
+import logger
 import logging
+from config import DATABASE_URL
 
-logger = logging.getLogger("database")
+
+logger_database = logging.getLogger("database")
+
 
 class DBManager:
     def __init__(self, database_url: str) -> None:
@@ -24,13 +28,13 @@ class DBManager:
             user = User(tg_id=tg_id, group_id=group_id)
             session.add(user)
             session.commit()
-            logger.info(f"User {tg_id} created.")
+            logger_database.info(f"User {tg_id} created.")
         except IntegrityError:
             session.rollback()
-            logger.error(f"User {tg_id} already exists.")
+            logger_database.info(f"User {tg_id} already exists.")
         except Exception as e:
             session.rollback()
-            logger.error(f"Creating user '{tg_id}': {str(e)}")
+            logger_database.error(f"Creating user '{tg_id}': {str(e)}")
         finally:
             session.close()
 
@@ -40,10 +44,13 @@ class DBManager:
             group = Group(name=name)
             session.add(group)
             session.commit()
-            logger.info(f"Group '{name}' created.")
+            logger_database.info(f"Group '{name}' created.")
         except IntegrityError:
             session.rollback()
-            logger.error(f"Group '{name}' already exists.")
+            logger_database.info(f"Group '{name}' already exists.")
+        except Exception as e:
+            session.rollback()
+            logger_database.error(f"Creating group '{name}': {str(e)}")
         finally:
             session.close()
 
@@ -53,10 +60,13 @@ class DBManager:
             lesson = Lesson(subject_id=subject_id, type=type_of_lesson, auditorium=auditorium)
             session.add(lesson)
             session.commit()
-            logger.info(f"Lesson created for subject {subject_id} of type {type_of_lesson}.")
-        except IntegrityError:
+            logger_database.info(f"Lesson created for subject {subject_id} of type {type_of_lesson}.")
+        # except IntegrityError:
+        #     session.rollback()
+        #     logger.info(f"Could not create lesson {subject_id} of type {type_of_lesson}.")
+        except Exception as e:
             session.rollback()
-            logger.error(f"Error: Could not create lesson.")
+            logger_database.error(f"Creating lesson '{subject_id}' : {str(e)}")
         finally:
             session.close()
 
@@ -66,13 +76,13 @@ class DBManager:
             subject = Subject(name=subject_name)
             session.add(subject)
             session.commit()
-            logger.info(f"Subject '{subject_name}' created.")
+            logger_database.info(f"Subject '{subject_name}' created.")
         except IntegrityError:
             session.rollback()
-            logger.error(f"Subject {subject_name} already exists.")
+            logger_database.info(f"Subject {subject_name} already exists.")
         except Exception as e:
             session.rollback()
-            logger.error(f"Creating subject '{subject_name}': {str(e)}")
+            logger_database.error(f"Creating subject '{subject_name}': {str(e)}")
         finally:
             session.close()
 
@@ -82,13 +92,13 @@ class DBManager:
             lesson_time = LessonTime(lesson_number=lesson_number, start_time=start_time, end_time=end_time)
             session.add(lesson_time)
             session.commit()
-            logger.info(f"Lesson time for lesson number {lesson_number} created, from {start_time} to {end_time}.")
+            logger_database.info(f"Lesson time for lesson number {lesson_number} created, from {start_time} to {end_time}.")
         except IntegrityError:
             session.rollback()
-            logger.error(f"Lesson number {lesson_number} already exists.")
+            logger_database.info(f"Lesson number {lesson_number} already exists.")
         except Exception as e:
             session.rollback()
-            logger.error(f"Creating lesson time for lesson number {lesson_number}: {str(e)}")
+            logger_database.error(f"Creating lesson time for lesson number {lesson_number}: {str(e)}")
         finally:
             session.close()
 
@@ -99,23 +109,21 @@ class DBManager:
             subject = session.query(Subject).filter(Subject.name == subject_name).first()
 
             if not subject:
-                logger.error(f"Subject '{subject_name}' not found.")
+                logger_database.info(f"Subject '{subject_name}' not found.")
                 return
 
             lesson = Lesson(subject_id=subject.id, type=lesson_type, auditorium=auditorium)
             session.add(lesson)
             session.commit()
 
-            logger.info(f"Lesson created for subject {subject.id} of type {lesson_type}.")
+            logger_database.info(f"Lesson created for subject {subject.id} of type {lesson_type}.")
 
             group_ids = []
             for group_name in group_names:
                 group = session.query(Group).filter(Group.name == group_name).first()
                 if group:
                     group_ids.append(group.id)
-                    logger.info(f"Group '{group_name}' found with ID {group.id}.")
                 else:
-                    logger.error(f"Group '{group_name}' not found.")
                     continue
 
             for group_id in group_ids:
@@ -130,10 +138,13 @@ class DBManager:
             session.commit()
 
             for group_id in group_ids:
-                logger.info(f"Group {group_id} attached to lesson {lesson.id}.")
+                logger_database.info(f"Group {group_id} attached to lesson {lesson.id}.")
+        except IntegrityError:
+            session.rollback()
+            # TODO:
         except Exception as e:
             session.rollback()
-            logger.error(f"Creating lesson and adding groups: {str(e)}")
+            logger_database.error(f"Creating lesson and adding groups: {str(e)}")
         finally:
             session.close()
 
@@ -143,7 +154,7 @@ class DBManager:
             user = session.query(User).filter(User.tg_id == tg_id).first()
 
             if not user:
-                logger.error(f"User with tg_id {tg_id} not found.")
+                logger_database.info(f"User with tg_id {tg_id} not found.")
                 return None
 
             lessons = session.query(LessonGroup).join(Lesson).join(Group).join(LessonTime).filter(
@@ -154,10 +165,10 @@ class DBManager:
             ).order_by(LessonGroup.lesson_number.asc()).all()
 
             if not lessons:
-                logger.info(f"No lessons found for user {tg_id} on {lesson_date}.")
+                logger_database.info(f"No lessons found for user {tg_id} on {lesson_date}.")
                 return []
 
-            logger.info(f"Found {len(lessons)} lessons for user {tg_id} on {lesson_date}.")
+            logger_database.info(f"Found {len(lessons)} lessons for user {tg_id} on {lesson_date}.")
 
             lesson_details = []
             for lesson in lessons:
@@ -174,7 +185,7 @@ class DBManager:
 
         except Exception as e:
             session.rollback()
-            logger.error(f"Fetching lessons for user {tg_id} on {lesson_date}: {str(e)}")
+            logger_database.error(f"Fetching lessons for user {tg_id} on {lesson_date}: {str(e)}")
             return None
         finally:
             session.close()
@@ -185,24 +196,24 @@ class DBManager:
             user = session.query(User).filter(User.tg_id == tg_id).first()
 
             if not user:
-                logger.error(f"User {tg_id} not found.")
-                return f"User not found."
+                logger_database.info(f"User {tg_id} not found.")
+                return "User not found."
 
             group = session.query(Group).filter(Group.name == group_name).first()
 
             if not group:
-                logger.error(f"Group {group_name} not found.")
+                logger_database.info(f"Group {group_name} not found.")
                 return f"Group {group_name} not found."
 
             user.group_id = group.id
             session.commit()
-            logger.info(f"User {tg_id} attached to group '{group.name}'.")
+            logger_database.info(f"User {tg_id} attached to group '{group.name}'.")
             return f"Attached to group '{group.name}'."
 
         except Exception as e:
             session.rollback()
-            logger.error(f"Attaching user {tg_id} to group {group_name}: {str(e)}")
-            return f"Something went wrong write to @cawa0007"
+            logger_database.error(f"Attaching user {tg_id} to group {group_name}: {str(e)}")
+            return "Something went wrong write to @cawa0007"
         finally:
             session.close()
 
@@ -220,16 +231,37 @@ class DBManager:
             self.create_lesson_time(lesson_time[0], lesson_time[1], lesson_time[2])
 
         subjects = [
+            "DesignPatterns",
             "Algorithms and DS",
             "ProbTheory&Stats",
-            "DesignPatterns",
+            "ProbTheory&Stats",
             "OS Software",
-            "Multythread. C#",
-            "SQL&DataProc", 
+            "SQL&DataProc",
+            "Multythread. JA",
             "Modern JS WebDev",
             "Automated testing",
+            "Multythread. C#",
             "IP Law Basics",
+            "WebDev JS",
+            "Intro to DT",
+            "Disc Math",
+            "OOP Java",
+            "English",
+            "Func Sftw Testing",
+            "High Math",
+            "CloudTech",
+            "Cryptogr&Blockchain",
+            "Моbile Dev Kotlin",
+            "UX/UI design",
+            "Team project",
+            "Моbile Dev React Native",
+            "Project Planning Method",
+            "Machine Learning",
+            "BA basics",
+            "WebDev with .NET",
+            "PM basics"
         ]
+
         for subject_name in subjects:
             self.create_subject(subject_name)
 
@@ -243,10 +275,10 @@ class DBManager:
             ).delete(synchronize_session=False)
 
             session.commit()
-            logger.info(f"Deleted {deleted_count} lessons from {yesterday}.")
+            logger_database.info(f"Deleted {deleted_count} lessons from {yesterday}.")
         except Exception as e:
             session.rollback()
-            logger.error(f"Error deleting yesterday's lessons: {str(e)}")
+            logger_database.error(f"Error deleting yesterday's lessons: {str(e)}")
         finally:
             session.close()
 
@@ -257,7 +289,10 @@ class DBManager:
             return groups
         except Exception as e:
             session.rollback()
-            logger.error(f"Ошибка при получении групп: {e}")
+            logger_database.error(f"Error at getting all groups {e}")
             return []
         finally:
             session.close()
+
+
+database: DBManager = DBManager(database_url=DATABASE_URL)
