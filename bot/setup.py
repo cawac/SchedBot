@@ -1,38 +1,41 @@
 from datetime import datetime, timedelta
 
+from config import DATABASE_URL, now_local
 from db import DBManager
-from config import DATABASE_URL
+from parser import Parser, get_all_file_paths
+import requests
 
 if __name__ == '__main__':
     database = DBManager(DATABASE_URL)
-
     database.set_default()
 
-    database.create_group("23-LR-CS")
-    database.create_group("23-LR-JA")
-    database.create_group("23-LR-JS")
+    amount_of_days = 2
+    parser = Parser()
 
-    database.create_group("23-HR-JA1")
-    database.create_group("23-HR-JA2")
-    database.create_group("23-HR-CS1")
-    database.create_group("23-HR-CS2")
-    database.create_group("23-HR-JS1")
-    database.create_group("23-HR-JS2")
-    database.create_group("23-HO")
+    # urls = f"https://docs.google.com/spreadsheets/d/1lgRVGshD1Cyjg_Cex73K--wySnQMi5TUsojz0JlTfB0/edit?gid=0#gid=0"
+    #
+    # response = requests.get(urls)
+    #
+    # with open("schedules/spreadsheet.xlsx", "wb") as f:
+    #     f.write(response.content)
 
-    database.create_lesson_and_add_groups(["23-LR-CS", "23-LR-JA", "23-LR-JS"], datetime.today(), 6, "Algorithms and DS", "Lecture")
+    for file_path in get_all_file_paths("schedules"):
+        parser.load_schedule(file_path, min_column=6, min_row=4, max_column=13, max_row=863)
+        for group in parser.get_all_groups():
+            database.create_group(group)
+        for i in range(amount_of_days):
+            current_date = now_local() + timedelta(days=i)
+            lessons_on_day = parser.parse_lessons_for_day(now_local() + timedelta(days=i))
 
-    database.create_lesson_and_add_groups(["23-HR-JA1", "23-HR-JA2", "23-HR-CS1", "23-HR-CS2", "23-HR-JS1", "23-HR-JS2","23-HO"], datetime.today() + timedelta(days=0), 2, "ProbTheory&Stats", "Lecture", "aud 327")
-    database.create_lesson_and_add_groups(["23-HR-CS1"], datetime.today() + timedelta(days=0), 3, "Multythread. C#", "Practice", "aud 330")
-    database.create_lesson_and_add_groups(["23-HR-CS2"], datetime.today() + timedelta(days=0), 3, "SQL&DataProc", "Practice", "aud 339")
-    database.create_lesson_and_add_groups(["23-HR-JS1"], datetime.today() + timedelta(days=0), 3, "Modern JS WebDev", "Practice", "aud 341")
-    database.create_lesson_and_add_groups(["23-HR-JS2"], datetime.today() + timedelta(days=0), 3, "ProbTheory&Stats", "Practice")
-    database.create_lesson_and_add_groups(["23-HR-JS2"], datetime.today() + timedelta(days=0), 4, "Modern JS WebDev", "Practice")
+            if lessons_on_day is None:
+                continue
 
-
-    database.create_lesson_and_add_groups(["23-HR-CS1", "23-HR-CS2"], datetime.today() + timedelta(days=1), 1, "Multythread. C#", "Lecture")
-    database.create_lesson_and_add_groups(["23-HR-JA1"], datetime.today() + timedelta(days=1), 1, "Automated testing", "Practice")
-    database.create_lesson_and_add_groups(["23-HR-JS1", "23-LR-JS2", "23-HO"], datetime.today() + timedelta(days=1), 1, "Modern JS WebDev", "Lecture")
-    database.create_lesson_and_add_groups(["23-HR-CS2"], datetime.today() + timedelta(days=1), 2, "Automated testing", "Practice")
-    database.create_lesson_and_add_groups(["23-HR-JS2"], datetime.today() + timedelta(days=1), 2, "ProbTheory&Stats", "Practice")
-    database.create_lesson_and_add_groups(["23-HR-JA1", "23-HR-JA2", "23-HR-CS1", "23-HR-CS2", "23-HR-JS1", "23-HR-JS2","23-HO"], datetime.today() + timedelta(days=1), 3, "IP Law Basics", "Lecture")
+            for lesson in lessons_on_day:
+                database.create_lesson_and_add_groups(
+                    lesson["groups"],
+                    current_date,
+                    lesson["lesson_number"],
+                    lesson["subject_name"],
+                    lesson["lesson_type"],
+                    lesson["auditorium"]
+                )
