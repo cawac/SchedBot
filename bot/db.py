@@ -148,7 +148,7 @@ class DBManager:
         finally:
             session.close()
 
-    def get_user_lessons_on_date(self, tg_id: int, lesson_date: date) -> list[dict[str, InstrumentedAttribute | Any]] | None:
+    def __get_user_lessons_on_date(self, tg_id: int, lesson_date: date) -> list[dict[str, InstrumentedAttribute | Any]] | None:
         session = self.Session()
         try:
             user = session.query(User).filter(User.tg_id == tg_id).first()
@@ -173,6 +173,7 @@ class DBManager:
             lesson_details = []
             for lesson in lessons:
                 lesson_info = {
+                    "lesson_date": lesson.lesson_date,
                     "lesson_number": lesson.lesson_number,
                     "subject_name": lesson.lesson.subject.name,
                     "lesson_type": lesson.lesson.type,
@@ -186,6 +187,36 @@ class DBManager:
         except Exception as e:
             session.rollback()
             logger_database.error(f"Fetching lessons for user {tg_id} on {lesson_date}: {str(e)}")
+            return None
+        finally:
+            session.close()
+
+    def get_user_lessons_on_period(self, tg_id: int, start_period: date, end_period: date) -> list[dict[str, InstrumentedAttribute | Any]]:
+        session = self.Session()
+        try:
+            user = session.query(User).filter(User.tg_id == tg_id).first()
+
+            if not user:
+                logger_database.info(f"User with tg_id {tg_id} not found.")
+                return None
+
+            current_date = start_period
+            lessons_on_dates: list = []
+            while current_date <= end_period:
+                lessons_on_date = self.__get_user_lessons_on_date(tg_id, current_date)
+                lessons_on_dates.append(lessons_on_date)
+                current_date += timedelta(days=1)
+
+            if not any(lessons_on_dates):
+                logger_database.info(f"No lessons found for user {tg_id} from {start_period} to {end_period}.")
+                return []
+
+            logger_database.info(f"Found lessons for user {tg_id} from {start_period} to {end_period}.")
+            return lessons_on_dates
+
+        except Exception as e:
+            session.rollback()
+            logger_database.error(f"Fetching lessons for user {tg_id} from {start_period} to {end_period}: {str(e)}")
             return None
         finally:
             session.close()
@@ -265,7 +296,7 @@ class DBManager:
         for subject_name in subjects:
             self.create_subject(subject_name)
 
-    def delete_yesterdays_lessons(self) -> None:
+    def delete_yesterday_lessons(self) -> None:
         session = self.Session()
         try:
             yesterday = (datetime.now().date() - timedelta(days=1))
