@@ -7,3 +7,4 @@
 /bot/bot.log
 /bot/celerybeat-schedule
 /pgdata
+/bot/schedules/
