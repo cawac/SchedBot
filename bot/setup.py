@@ -9,7 +9,7 @@ if __name__ == '__main__':
     database = DBManager(DATABASE_URL)
     database.set_default()
 
-    amount_of_days = 2
+    amount_of_days = 20
     parser = Parser()
 
     # urls = f"https://docs.google.com/spreadsheets/d/1lgRVGshD1Cyjg_Cex73K--wySnQMi5TUsojz0JlTfB0/edit?gid=0#gid=0"

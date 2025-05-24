@@ -38,7 +38,7 @@ def replacer(match):
     return content
 
 
-# @enrich_with(get_date_from_sheet)
+@enrich_with(get_date_from_sheet)
 @enrich_with(lambda sheet, row, column: {"groups": [sheet.cell(row, 5).value]})
 @enrich_with(lambda sheet, row, column: {"lesson_number": int(sheet.cell(2, column).value)})
 def get_lesson_info(sheet, row, column):
@@ -48,11 +48,12 @@ def get_lesson_info(sheet, row, column):
 
     auditorium_match = re.search(r"aud\s*(\d+)", lesson_info, re.IGNORECASE)
     auditorium = auditorium_match.group(1) if auditorium_match else None
-
     lesson_info = re.sub(r"aud\s*\d+", "", lesson_info, flags=re.IGNORECASE).strip()
-    lesson_info = lesson_info.split('(')[0].strip()
+
+    subject_name = lesson_info
+    subject_name = subject_name.split('(')[0].strip()
     return {
-        "subject_name": lesson_info,
+        "subject_name": subject_name,
         "lesson_type": "Lecture" if "(L)" in lesson_info else "Practice",
         "auditorium": auditorium,
     }
@@ -113,7 +114,9 @@ class Parser:
             for column in range(self.working_area.get("min_column", 6), self.working_area.get("max_column", 12) + 1):
                 cell = self.__sheet.cell(row=row, column=column)
                 if self.__sheet.cell(row, column).value is not None or is_yellow(cell):
-                    lessons.append(get_lesson_info(self.__sheet, row, column))
+                    lesson_info = get_lesson_info(self.__sheet, row, column)
+                    if lesson_info["date"].date() == date.date():
+                        lessons.append(lesson_info)
 
         cleaned_lessons = None
 

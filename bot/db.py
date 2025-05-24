@@ -1,6 +1,6 @@
 from datetime import time, date, datetime, timedelta
 from operator import and_
-from typing import Any
+from typing import Any, List, Dict
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
@@ -148,7 +148,7 @@ class DBManager:
         finally:
             session.close()
 
-    def __get_user_lessons_on_date(self, tg_id: int, lesson_date: date) -> list[dict[str, InstrumentedAttribute | Any]] | None:
+    def get_user_lessons_on_date(self, tg_id: int, lesson_date: date) -> list[dict[str, InstrumentedAttribute | Any]] | None:
         session = self.Session()
         try:
             user = session.query(User).filter(User.tg_id == tg_id).first()
@@ -191,7 +191,7 @@ class DBManager:
         finally:
             session.close()
 
-    def get_user_lessons_on_period(self, tg_id: int, start_period: date, end_period: date) -> list[dict[str, InstrumentedAttribute | Any]]:
+    def get_user_lessons_on_period(self, tg_id: int, start_period: date, end_period: date) -> List[List[Dict[str, InstrumentedAttribute | Any]]]:
         session = self.Session()
         try:
             user = session.query(User).filter(User.tg_id == tg_id).first()
@@ -203,7 +203,7 @@ class DBManager:
             current_date = start_period
             lessons_on_dates: list = []
             while current_date <= end_period:
-                lessons_on_date = self.__get_user_lessons_on_date(tg_id, current_date)
+                lessons_on_date = self.get_user_lessons_on_date(tg_id, current_date)
                 lessons_on_dates.append(lessons_on_date)
                 current_date += timedelta(days=1)
 
@@ -217,6 +217,70 @@ class DBManager:
         except Exception as e:
             session.rollback()
             logger_database.error(f"Fetching lessons for user {tg_id} from {start_period} to {end_period}: {str(e)}")
+            return None
+        finally:
+            session.close()
+
+    def get_user_lessons_on_period_2(self, tg_id: int, start_period: date, amount_of_days: int = 1) -> List[List[Dict[str, InstrumentedAttribute | Any]]]:
+        session = self.Session()
+        try:
+            user = session.query(User).filter(User.tg_id == tg_id).first()
+
+            if not user:
+                logger_database.info(f"User with tg_id {tg_id} not found.")
+                return None
+
+            current_date = start_period
+            lessons_on_dates: list = []
+            processed_days = 0
+            while processed_days <= amount_of_days:
+                lessons_on_date = self.get_user_lessons_on_date(tg_id, current_date)
+                lessons_on_dates.append(lessons_on_date)
+                current_date += timedelta(days=1)
+                processed_days += 1
+
+            if not any(lessons_on_dates):
+                logger_database.info(f"No lessons found for user {tg_id} from {start_period} for amount of days {amount_of_days + 1}.")
+                return []
+
+            logger_database.info(f"Found lessons for user {tg_id} from {start_period} for amount of days {amount_of_days + 1}.")
+            return lessons_on_dates
+
+        except Exception as e:
+            session.rollback()
+            logger_database.error(f"Fetching lessons for user {tg_id} from {start_period} for amount of days {amount_of_days + 1}: {str(e)}")
+            return None
+        finally:
+            session.close()
+
+    def get_user_lessons_on_period_3(self, tg_id: int, start_period: date, amount_of_days: int = 1) -> Dict[date, List[Dict[str, InstrumentedAttribute | Any]]] | None:
+        session = self.Session()
+        try:
+            user = session.query(User).filter(User.tg_id == tg_id).first()
+
+            if not user:
+                logger_database.info(f"User with tg_id {tg_id} not found.")
+                return None
+
+            current_date = start_period
+            lessons_on_dates: dict = dict()
+            processed_days = 0
+            while processed_days <= amount_of_days:
+                lessons_on_date = self.get_user_lessons_on_date(tg_id, current_date)
+                lessons_on_dates[current_date] = lessons_on_date
+                current_date += timedelta(days=1)
+                processed_days += 1
+
+            if len(lessons_on_dates) == 0:
+                logger_database.info(f"No lessons found for user {tg_id} from {start_period} for amount of days {amount_of_days + 1}.")
+                return None
+
+            logger_database.info(f"Found lessons for user {tg_id} from {start_period} for amount of days {amount_of_days + 1}.")
+            return lessons_on_dates
+
+        except Exception as e:
+            session.rollback()
+            logger_database.error(f"Fetching lessons for user {tg_id} from {start_period} for amount of days {amount_of_days + 1}: {str(e)}")
             return None
         finally:
             session.close()

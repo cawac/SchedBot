@@ -1,12 +1,13 @@
+import datetime
+import logging
 from datetime import timedelta
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
-from config import now_local
 
-from db import database
 import logger
-import logging
+from config import now_local
+from db import database
 
 logger_handlers = logging.getLogger("handlers")
 
@@ -18,7 +19,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     database.create_user(update.message.from_user.id)
     await update.message.reply_text(
         "Hello!\n"
-        "Thank you, for participating in testing ESDC shedule bot!"
+        "I am bot for schedule in ESDC.\n"
+        "I have several commands:\n"
+        "/help - how to use me;\n"
+        "/set_group - attach you to the group by group name;\n"
+        "/today - show today schedule (won't work if you not attached to any group);\n"
+        "/tomorrow - show tomorrow schedule (won't work if you not attached to any group).\n"
+        "To start using this bot you need to set up your group using /set_group\n"
+        "Thank you, for participating in testing ESDCSchedBot!"
     )
 
 
@@ -26,21 +34,33 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "I am bot for schedule in ESDC.\n"
         "I have several commands:\n"
-        "/start - ...\n"
-        "/help - how to use me\n"
-        "/set_group - attach you to the group by name\n"
-        "/today - show today's schedule (won't work if you not attached to any group)\n"
-        "/tomorrow - show tomorrow's schedule (won't work if you not attached to any group)\n"
-        "to start using this bot you need to attach you to the group by name and that only one step what you need to do"
+        "/help - how to use me;\n"
+        "/set_group - attach you to the group by group name;\n"
+        "/today - show today schedule (won't work if you not attached to any group);\n"
+        "/tomorrow - show tomorrow schedule (won't work if you not attached to any group).\n"
+        "To start using this bot you need to set up your group using /set_group\n"
+        "Thank you, for participating in testing ESDCSchedBot!"
     )
 
+
+def make_day_lessons_message(lessons: list, header: str = "", footer: str = ""):
+    message: str = header + "\n"
+
+    if not lessons:
+        message += "You have no lessons for this day"
+        return message + "\n" + footer
+
+    for i, lesson in enumerate(lessons):
+        message += (f"{i + 1}. {lesson["subject_name"]} " +
+                    f"({lesson["lesson_type"]}): " +
+                    f"{lesson["lesson_start_time"]} - " +
+                    f"{lesson["lesson_end_time"]}\n")
+    return message + footer
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     response = database.get_user_lessons_on_date(update.message.from_user.id, now_local().date())
     if response:
-        message = "Today you have these lessons:\n"
-        for i, lesson in enumerate(response):
-            message += f"{i + 1}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
+        message: str = make_day_lessons_message(response, header="Today you have these lessons:")
         await update.message.reply_text(message)
     else:
         await update.message.reply_text("I can't find any lessons for that day. have a good day)")
@@ -49,12 +69,37 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def tomorrow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     response = database.get_user_lessons_on_date(update.message.from_user.id, now_local().date() + timedelta(days=1))
     if response:
-        message = "Tomorrow you have these lessons:\n"
-        for i, lesson in enumerate(response):
-            message += f"{i + 1}. {lesson["subject_name"]} ({lesson["lesson_type"]}): {lesson["lesson_start_time"]} - {lesson["lesson_end_time"]}\n"
+        message: str = make_day_lessons_message(response, header="Tomorrow you have these lessons:")
         await update.message.reply_text(message)
     else:
         await update.message.reply_text("I can't find any lessons for that day. have a good day)")
+
+async def week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    current_date = now_local()
+    weekday = current_date.weekday()
+    monday = current_date - timedelta(days=weekday)
+    response = database.get_user_lessons_on_period_3(update.message.from_user.id, monday, 6)
+    message: str = "This week you have these lessons:\n"
+    if response:
+        for date, day_lessons in response.items():
+            message += make_day_lessons_message(day_lessons, header=date.strftime('%Y-%m-%d'), footer="\n")
+        await update.message.reply_text(message)
+    else:
+        await update.message.reply_text("I can't find any lessons for this week.")
+
+async def two_week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    current_date = now_local()
+    weekday = current_date.weekday()
+    monday = current_date - timedelta(days=weekday)
+    response = database.get_user_lessons_on_period_3(update.message.from_user.id, monday, 13)
+    message: str = "This two week you have these lessons:\n"
+
+    if response:
+        for date, day_lessons in response.items():
+            message += make_day_lessons_message(day_lessons, header=date.strftime('%Y-%m-%d'), footer="\n")
+        await update.message.reply_text(message)
+    else:
+        await update.message.reply_text("I can't find any lessons for this two weeks.")
 
 
 async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

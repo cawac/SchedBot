@@ -1,6 +1,6 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler
 from handlers import start_command, help_command, set_group_command, today_command, tomorrow_command, receive_group, \
-    cancel, handle_message
+    cancel, handle_message, week_command, two_week_command
 from config import BOT_TOKEN
 import logger
 import logging
@@ -30,6 +30,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("today", today_command))
     app.add_handler(CommandHandler("tomorrow", tomorrow_command))
     app.add_handler(CommandHandler("set_group", set_group_command))
+    app.add_handler(CommandHandler("week", week_command))
+    app.add_handler(CommandHandler("two_weeks", two_week_command))
 
     # Messages
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
