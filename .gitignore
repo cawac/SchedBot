@@ -3,8 +3,8 @@
 *.log
 /.idea
 /bot/.env
-/bot/setup.py
+#/bot/setup.py
 /bot/bot.log
 /bot/celerybeat-schedule
 /pgdata
-/bot/schedules/
+#/bot/schedules/

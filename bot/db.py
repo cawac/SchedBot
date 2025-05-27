@@ -325,7 +325,7 @@ class DBManager:
         for lesson_time in lesson_times:
             self.create_lesson_time(lesson_time[0], lesson_time[1], lesson_time[2])
 
-        subjects = [
+        self.subjects = [
             "DesignPatterns",
             "Algorithms and DS",
             "ProbTheory&Stats",
@@ -357,7 +357,7 @@ class DBManager:
             "PM basics"
         ]
 
-        for subject_name in subjects:
+        for subject_name in self.subjects:
             self.create_subject(subject_name)
 
     def delete_yesterday_lessons(self) -> None:

@@ -17,6 +17,6 @@ BOT_USERNAME: Final = "@ESDCScheduleBot"
 POSTGRES_DB = getenv("SQL_DB", "postgres")
 POSTGRES_USER = getenv("SQL_USER", "postgres")
 POSTGRES_PASSWORD = getenv("SQL_PASSWORD", "postgres")
-POSTGRES_HOST = getenv("SQL_HOST", "db")
+POSTGRES_HOST = getenv("SQL_HOST", "database")
 POSTGRES_PORT = getenv("SQL_PORT", 5432)
 DATABASE_URL: Final = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
