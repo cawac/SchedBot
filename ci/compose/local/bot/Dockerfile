@@ -2,7 +2,7 @@
 
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONPATH=/bot
+ENV PYTHONPATH=/src
 
 RUN apt-get update \
   && apt-get install -y build-essential \
@@ -13,31 +13,31 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 
-COPY ./bot/requirements.txt /requirements.txt
+COPY ./src/requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 RUN pip install --no-cache-dir psycopg2-binary
 
-COPY ./compose/local/bot/entrypoint /entrypoint
+COPY ./ci/compose/local/bot/entrypoint /entrypoint
 RUN sed -i 's/\r$//g' /entrypoint
 RUN chmod +x /entrypoint
 
-COPY ./compose/local/bot/start /start
+COPY ./ci/compose/local/bot/start /start
 RUN sed -i 's/\r$//g' /start
 RUN chmod +x /start
 
-COPY ./compose/local/bot/celery/worker/start /start-celeryworker
-RUN sed -i 's/\r$//g' /start-celeryworker
-RUN chmod +x /start-celeryworker
+# COPY ./compose/local/bot/celery/worker/start /start-celeryworker
+# RUN sed -i 's/\r$//g' /start-celeryworker
+# RUN chmod +x /start-celeryworker
+#
+# COPY ./compose/local/bot/celery/beat/start /start-celerybeat
+# RUN sed -i 's/\r$//g' /start-celerybeat
+# RUN chmod +x /start-celerybeat
+#
+# COPY ./compose/local/bot/celery/flower/start /start-flower
+# RUN sed -i 's/\r$//g' /start-flower
+# RUN chmod +x /start-flower
 
-COPY ./compose/local/bot/celery/beat/start /start-celerybeat
-RUN sed -i 's/\r$//g' /start-celerybeat
-RUN chmod +x /start-celerybeat
-
-COPY ./compose/local/bot/celery/flower/start /start-flower
-RUN sed -i 's/\r$//g' /start-flower
-RUN chmod +x /start-flower
-
-WORKDIR /bot
+WORKDIR /src
 
 EXPOSE 8000
 
