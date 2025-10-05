@@ -2,6 +2,8 @@
 import os
 import re
 from datetime import datetime, date, timedelta
+from typing import Optional, Dict
+
 import openpyxl
 
 def is_yellow(cell):
@@ -40,11 +42,14 @@ def replacer(match):
 
 @enrich_with(get_date_from_sheet)
 @enrich_with(lambda sheet, row, column: {"groups": [sheet.cell(row, 5).value]})
-@enrich_with(lambda sheet, row, column: {"lesson_number": int(sheet.cell(2, column).value)})
-def get_lesson_info(sheet, row, column):
+@enrich_with(lambda sheet, row, column: {"lesson_number": int(sheet.cell(2, column).value) if sheet.cell(2, column).value is int else None})
+def get_lesson_info(sheet, row: int, column: int) -> Optional[Dict]:
     lesson_info: str = sheet.cell(row, column).value
     if isinstance(lesson_info, str):
         lesson_info = lesson_info.strip().replace("\n", "")
+
+    if not lesson_info:
+        return {}
 
     auditorium_match = re.search(r"aud\s*(\d+)", lesson_info, re.IGNORECASE)
     auditorium = auditorium_match.group(1) if auditorium_match else None
@@ -113,9 +118,9 @@ class Parser:
         for row in range(date_row, date_row + self.__amount_of_groups):
             for column in range(self.working_area.get("min_column", 6), self.working_area.get("max_column", 12) + 1):
                 cell = self.__sheet.cell(row=row, column=column)
-                if self.__sheet.cell(row, column).value is not None or is_yellow(cell):
+                if self.__sheet.cell(row, column).value or is_yellow(cell):
                     lesson_info = get_lesson_info(self.__sheet, row, column)
-                    if lesson_info["date"].date() == date.date():
+                    if lesson_info.get("subject_name") and lesson_info["date"].date() == date.date():
                         lessons.append(lesson_info)
 
         cleaned_lessons = None
@@ -185,6 +190,9 @@ class Parser:
             result.append(self.__sheet.cell(row=i, column=5).value)
 
         return result
+
+    def get_all_lessons(self):
+        pass
 
 
 def get_all_file_paths(directory):

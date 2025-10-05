@@ -4,15 +4,15 @@ services:
   bot:
     build:
       context: .
-      dockerfile: ./compose/local/bot/Dockerfile
-    image: bot
+      dockerfile: ./compose/local/src/Dockerfile
+    image: src
     command: /start
     volumes:
-      - ./bot:/bot
+      - ./src:/src
     ports:
       - '8000:8000'
     env_file:
-      - ./bot/.env
+      - ./src/.env
     depends_on:
 #      rabbitmq:
 #        condition: service_started
@@ -25,10 +25,10 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data/
     environment:
-      - POSTGRES_DB=postgres
+      - POSTGRES_DB=database
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_HOST=db
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_HOST=localhost
     ports:
       - "5432:5432"
     healthcheck:
@@ -53,13 +53,13 @@ services:
 #  celery_worker:
 #    build:
 #      context: .
-#      dockerfile: ./compose/local/bot/Dockerfile
+#      dockerfile: ./compose/local/src/Dockerfile
 #    image: worker
 #    command: /start-celeryworker
 #    volumes:
-#      - ./bot:/bot
+#      - ./src:/src
 #    env_file:
-#      - ./bot/.env
+#      - ./src/.env
 #    depends_on:
 #      rabbitmq:
 #        condition: service_started
@@ -69,13 +69,13 @@ services:
 #  celery_beat:
 #    build:
 #      context: .
-#      dockerfile: ./compose/local/bot/Dockerfile
+#      dockerfile: ./compose/local/src/Dockerfile
 #    image: beat
 #    command: /start-celerybeat
 #    volumes:
-#      - ./bot:/bot
+#      - ./src:/src
 #    env_file:
-#      - ./bot/.env
+#      - ./src/.env
 #    depends_on:
 #      rabbitmq:
 #        condition: service_started
@@ -85,13 +85,13 @@ services:
 #  flower:
 #    build:
 #      context: .
-#      dockerfile: ./compose/local/bot/Dockerfile
+#      dockerfile: ./compose/local/src/Dockerfile
 #    image: flower
 #    command: /start-flower
 #    volumes:
-#      - ./bot:/bot
+#      - ./src:/src
 #    env_file:
-#      - ./bot/.env
+#      - ./src/.env
 #    ports:
 #      - '5555:5555'
 #    depends_on:

@@ -1,45 +1,43 @@
-import datetime
-import logging
 from datetime import timedelta
+from typing import Optional, Sequence
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
-import logger
+import logging
 from config import now_local
-from db import database
+from db import database_manager
 
 logger_handlers = logging.getLogger("handlers")
 
 WAITING_FOR_GROUP = 1
 
 
+async def error_handler(update, context: ContextTypes.DEFAULT_TYPE):
+    logger_handlers.error(f"Exception occurred: {context.error}")
+
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    database.create_user(update.message.from_user.id)
+    database_manager.create_user(tg_id=update.message.from_user.id)
     await update.message.reply_text(
         "Hello!\n"
-        "I am bot for schedule in ESDC.\n"
-        "I have several commands:\n"
-        "/help - how to use me;\n"
-        "/set_group - attach you to the group by group name;\n"
-        "/today - show today schedule (won't work if you not attached to any group);\n"
-        "/tomorrow - show tomorrow schedule (won't work if you not attached to any group).\n"
-        "To start using this bot you need to set up your group using /set_group\n"
+        "I am src for schedule in ESDC.\n"
+        "To start abusing me you need to set up your group using /set_group\n"
+        "Currently src in testing stage \n"
         "Thank you, for participating in testing ESDCSchedBot!"
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "I am bot for schedule in ESDC.\n"
+        "I am src for schedule in ESDC.\n"
         "I have several commands:\n"
         "/help - how to use me;\n"
         "/set_group - attach you to the group by group name;\n"
         "/today - show today schedule (won't work if you not attached to any group);\n"
         "/tomorrow - show tomorrow schedule (won't work if you not attached to any group).\n"
-        "To start using this bot you need to set up your group using /set_group\n"
-        "Thank you, for participating in testing ESDCSchedBot!"
+        "/week - in development\n"
+        "/two_weeks - in development"
     )
 
 
@@ -58,7 +56,7 @@ def make_day_lessons_message(lessons: list, header: str = "", footer: str = ""):
     return message + footer
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    response = database.get_user_lessons_on_date(update.message.from_user.id, now_local().date())
+    response = database_manager.get_user_lessons_on_date(update.message.from_user.id, now_local().date())
     if response:
         message: str = make_day_lessons_message(response, header="Today you have these lessons:")
         await update.message.reply_text(message)
@@ -67,7 +65,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def tomorrow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    response = database.get_user_lessons_on_date(update.message.from_user.id, now_local().date() + timedelta(days=1))
+    response = database_manager.get_user_lessons_on_date(update.message.from_user.id, now_local().date() + timedelta(days=1))
     if response:
         message: str = make_day_lessons_message(response, header="Tomorrow you have these lessons:")
         await update.message.reply_text(message)
@@ -78,7 +76,7 @@ async def week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     current_date = now_local()
     weekday = current_date.weekday()
     monday = current_date - timedelta(days=weekday)
-    response = database.get_user_lessons_on_period_3(update.message.from_user.id, monday, 6)
+    response = database_manager.get_user_lessons_on_period_3(update.message.from_user.id, monday, 6)
     message: str = "This week you have these lessons:\n"
     if response:
         for date, day_lessons in response.items():
@@ -91,7 +89,7 @@ async def two_week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     current_date = now_local()
     weekday = current_date.weekday()
     monday = current_date - timedelta(days=weekday)
-    response = database.get_user_lessons_on_period_3(update.message.from_user.id, monday, 13)
+    response = database_manager.get_user_lessons_on_period_3(update.message.from_user.id, monday, 13)
     message: str = "This two week you have these lessons:\n"
 
     if response:
@@ -101,23 +99,45 @@ async def two_week_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     else:
         await update.message.reply_text("I can't find any lessons for this two weeks.")
 
+def make_keyboard(data: Sequence[str], columns: int = 1) -> InlineKeyboardMarkup:
+    if columns < 1 or columns > 5:
+        columns = 1
 
-async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    database.create_user(update.message.from_user.id)
-    groups = database.get_groups()
-    groups = [group.name for group in groups]
-    message = "\n".join(groups)
-    await update.message.reply_text(
-        "Please write your group name same as in Google Sheet table (23-LR-CS)\n"
-        "Groups which shedule added:" + message)
+    keyboard = []
+
+    for index in range(0, len(data), columns):
+        buttons_in_row = [InlineKeyboardButton(data[index_new], callback_data=data[index_new]) for index_new in range(index, min(index + columns, len(data)))]
+        keyboard.append(buttons_in_row)
+
+    keyboard.append([InlineKeyboardButton("Cancel", callback_data="Cancel")])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def set_group_command(update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    database_manager.create_user(tg_id=update.message.from_user.id)
+    groups = database_manager.get_groups()
+    group_names = tuple(group.name for group in groups)
+    reply_markup = make_keyboard(group_names, 3)
+
+    await update.message.reply_text("Choose a group:", reply_markup=reply_markup)
     return WAITING_FOR_GROUP
 
 
-async def receive_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    group_name: str = update.message.text
-    user_info = update.message.from_user
-    reply: str = database.attach_user_to_group(user_info.id, group_name)
-    await update.message.reply_text(reply)
+async def receive_group_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
+    query = update.callback_query
+    logger_handlers.info(f"Callback waiting with")
+    await query.answer()
+
+    logger_handlers.info(f"Callback received with {query.data}")
+    data = query.data
+    if data == "Cancel":
+        await query.edit_message_text(f"Selection of group canceled")
+        return ConversationHandler.END
+
+    user_info = query.from_user
+    user_group = data
+    database_manager.attach_user_to_group(user_info.id, user_group)
+    await query.edit_message_text(f"Group '{user_group}' selected.")
     return ConversationHandler.END
 
 
@@ -129,14 +149,16 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Responses
 def handle_response(text: str) -> str:
     dt = now_local()
-    return "current date and time:" + dt.strftime("%Y-%m-%d - %H:%M:%S")
+    return ("Sorry, today I'm not interested in conversation(\n"
+            "But I can tell you my current date and time)\n"
+            "Current date and time:") + dt.strftime("%Y-%m-%d - %H:%M:%S")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message_type: str = update.message.chat.type
     text: str = update.message.text
 
-    logger.info(f"User {update.message.chat.id} sent message: {message_type}: '{text}'")
+    logger_handlers.info(f"User {update.message.chat.id} sent message: {message_type}: '{text}'")
     response: str = handle_response(text)
-    logger.info(f"Bot {response}")
+    logger_handlers.info(f"Bot {response}")
     await update.message.reply_text(response)

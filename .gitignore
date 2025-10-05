@@ -2,9 +2,9 @@
 /__pycache__
 *.log
 /.idea
-/bot/.env
-#/bot/setup.py
-/bot/bot.log
-/bot/celerybeat-schedule
+/src/.env
+#/src/setup.py
+/src/bot.log
+/src/celerybeat-schedule
 /pgdata
-#/bot/schedules/
+#/src/schedules/

@@ -1,15 +1,14 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from config import DATABASE_URL, now_local
-from db import DBManager
+from config import now_local
+from db import database_manager
 from parser import Parser, get_all_file_paths
-import requests
 
 if __name__ == '__main__':
-    database = DBManager(DATABASE_URL)
+    database = database_manager
     database.set_default()
 
-    amount_of_days = 20
+    amount_of_days = 100
     parser = Parser()
 
     # urls = f"https://docs.google.com/spreadsheets/d/1lgRVGshD1Cyjg_Cex73K--wySnQMi5TUsojz0JlTfB0/edit?gid=0#gid=0"
