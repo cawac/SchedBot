@@ -14,9 +14,9 @@ def now_local() -> datetime:
 BOT_TOKEN: Final = getenv("BOT_TOKEN")
 BOT_USERNAME: Final = "@ESDCScheduleBot"
 
-POSTGRES_DB = getenv("SQL_DB", "database")
-POSTGRES_USER = getenv("SQL_USER", "postgres")
-POSTGRES_PASSWORD = getenv("SQL_PASSWORD", "password")
-POSTGRES_HOST = getenv("SQL_HOST", "db")
-POSTGRES_PORT = getenv("SQL_PORT", 5432)
-DATABASE_URL: Final = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+POSTGRES_USER = getenv("POSTGRES_USER", "user")
+POSTGRES_PASSWORD = getenv("POSTGRES_PASSWORD", "secret_pass")
+POSTGRES_HOST = getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = getenv("POSTGRES_PORT", 5432)
+POSTGRES_DB = getenv("POSTGRES_DB", "app_db")
+DATABASE_URL: Final = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@db:{POSTGRES_PORT}/{POSTGRES_DB}"

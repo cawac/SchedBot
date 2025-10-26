@@ -34,7 +34,7 @@ class LessonTime(Base):
 lesson_type_enum = postgresql.ENUM(
     "UNKNOWN", "LECTURE", "PRACTICE", "SEMINAR", "LAB", "EXAM",
     name="lesson_type",
-    create_type=False   # в модели
+    create_type=True
 )
 
 class Lesson(Base):

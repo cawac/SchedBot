@@ -127,7 +127,7 @@ async def set_group_command(update, context: ContextTypes.DEFAULT_TYPE) -> int:
     group_names = tuple(group.name for group in groups)
     reply_markup = make_keyboard(group_names, 3)
 
-    await update.message.reply_text("<b>Choose a group</b>:", reply_markup=reply_markup)
+    await update.message.reply_text("Choose a group:", reply_markup=reply_markup)
     return WAITING_FOR_GROUP
 
 async def receive_group_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:

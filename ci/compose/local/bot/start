@@ -4,5 +4,7 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
+alembic upgrade head
+
 python setup.py
 python main.py
