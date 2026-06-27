@@ -1,5 +1,0 @@
-#!/bin/bash
-set -e
-set -u
-rm -f celerybeat.pid
-celery -A celery_configs.celery_app beat -l info

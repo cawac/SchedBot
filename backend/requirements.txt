@@ -1,0 +1,9 @@
+sqlalchemy==2.0.51
+psycopg2-binary==2.9.12
+alembic
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+pytz
+tzlocal

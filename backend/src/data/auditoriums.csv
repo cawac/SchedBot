@@ -1,0 +1,16 @@
+name,number,building,floor,capacity,type
+Lecture Hall A,101,Main Building,1,150,LECTURE_HALL
+Lecture Hall B,102,Main Building,1,120,LECTURE_HALL
+Computer Lab 1,201,Tech Building,2,30,COMPUTER_LAB
+Computer Lab 2,202,Tech Building,2,30,COMPUTER_LAB
+Classroom 301,301,Science Building,3,40,CLASSROOM
+Classroom 302,302,Science Building,3,40,CLASSROOM
+Classroom 401,401,Main Building,4,35,CLASSROOM
+Seminar Room 402,402,Main Building,4,20,SEMINAR_ROOM
+Lab 303,303,Science Building,3,25,LAB
+Lab 304,304,Science Building,3,25,LAB
+Lecture Hall C,103,Main Building,1,100,LECTURE_HALL
+Classroom 501,501,Tech Building,5,45,CLASSROOM
+Computer Lab 3,203,Tech Building,2,35,COMPUTER_LAB
+Seminar Room 403,403,Main Building,4,25,SEMINAR_ROOM
+Classroom 305,305,Science Building,3,40,CLASSROOM

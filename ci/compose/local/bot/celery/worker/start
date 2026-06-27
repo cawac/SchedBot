@@ -1,4 +1,0 @@
-#!/bin/bash
-set -e
-set -u
-celery -A celery_configs.celery_app worker -l info

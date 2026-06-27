@@ -1,22 +1,40 @@
-version: '3.9'
-
 services:
-  bot:
+  backend:
     build:
-      context: .
-      dockerfile: ./ci/compose/local/bot/Dockerfile
-    image: bot
-    command: /start
+      context: ./backend
+      dockerfile: Dockerfile
+    image: schedbot-backend
     volumes:
-      - ./src:/src
+      - ./backend/src:/app/src
     ports:
       - '8000:8000'
     env_file:
-      - ./src/.env
+      - ./backend/src/.env
     depends_on:
-#      rabbitmq:
-#        condition: service_started
       db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: schedbot-frontend
+    volumes:
+      - ./frontend/src:/app/src
+    ports:
+      - '8443:8443'
+    env_file:
+      - ./frontend/src/.env
+    environment:
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      backend:
         condition: service_healthy
 
   db:
@@ -25,7 +43,7 @@ services:
     volumes:
       - ./pgdata:/var/lib/postgresql/data/
     env_file:
-      - ./src/.env
+      - ./.env.db
     ports:
       - "5432:5432"
     healthcheck:
@@ -49,14 +67,14 @@ services:
 #
 #  celery_worker:
 #    build:
-#      context: .
-#      dockerfile: ./compose/local/src/Dockerfile
+#      context: ./backend
+#      dockerfile: Dockerfile
 #    image: worker
 #    command: /start-celeryworker
 #    volumes:
-#      - ./src:/src
+#      - ./backend/src:/app/src
 #    env_file:
-#      - ./src/.env
+#      - ./backend/src/.env
 #    depends_on:
 #      rabbitmq:
 #        condition: service_started
@@ -65,14 +83,14 @@ services:
 #
 #  celery_beat:
 #    build:
-#      context: .
-#      dockerfile: ./compose/local/src/Dockerfile
+#      context: ./backend
+#      dockerfile: Dockerfile
 #    image: beat
 #    command: /start-celerybeat
 #    volumes:
-#      - ./src:/src
+#      - ./backend/src:/app/src
 #    env_file:
-#      - ./src/.env
+#      - ./backend/src/.env
 #    depends_on:
 #      rabbitmq:
 #        condition: service_started
@@ -81,14 +99,14 @@ services:
 #
 #  flower:
 #    build:
-#      context: .
-#      dockerfile: ./compose/local/src/Dockerfile
+#      context: ./backend
+#      dockerfile: Dockerfile
 #    image: flower
 #    command: /start-flower
 #    volumes:
-#      - ./src:/src
+#      - ./backend/src:/app/src
 #    env_file:
-#      - ./src/.env
+#      - ./backend/src/.env
 #    ports:
 #      - '5555:5555'
 #    depends_on:
